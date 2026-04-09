@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pruning Recommendation MVP</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>AI Crop Pruning Advisor (MVP)</h1>
+      <p>Upload a plant/tree image to highlight branches recommended for pruning.</p>
+
+      <form id="uploadForm">
+        <input type="file" id="imageInput" accept="image/*" required />
+        <button type="submit">Analyze Image</button>
+      </form>
+
+      <section class="grid">
+        <div>
+          <h2>Preview</h2>
+          <canvas id="previewCanvas"></canvas>
+        </div>
+        <div>
+          <h2>Analysis Result</h2>
+          <canvas id="resultCanvas"></canvas>
+        </div>
+      </section>
+
+      <section>
+        <h2>Pruning Suggestions</h2>
+        <ul id="suggestionsList"></ul>
+      </section>
+      <p id="status"></p>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
