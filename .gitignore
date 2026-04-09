@@ -1,0 +1,10 @@
+backend/node_modules
+backend/.venv
+backend/uploads/*
+backend/results/*
+!backend/uploads/.gitkeep
+!backend/results/.gitkeep
+.DS_Store
+
+backend/python/__pycache__
+*.pyc
