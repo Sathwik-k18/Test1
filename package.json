@@ -1,0 +1,11 @@
+{
+  "name": "crop-pruning-system",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node backend/src/server.js",
+    "start:backend": "cd backend && npm run start",
+    "dev:backend": "cd backend && npm run dev",
+    "start:frontend": "cd frontend && python3 -m http.server 5500"
+  }
+}
