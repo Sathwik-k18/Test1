@@ -8,22 +8,16 @@ import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { v4 as uuidv4 } from "uuid";
-import dotenv from "dotenv";
-
-dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const backendRoot = path.resolve(__dirname, "..");
-const projectRoot = path.resolve(backendRoot, "..");
-const frontendRoot = path.resolve(projectRoot, "frontend");
+const projectRoot = path.resolve(__dirname, "..");
 
 const app = express();
-const PORT = Number(process.env.PORT || 4000);
-const HOST = process.env.HOST || "0.0.0.0";
+const PORT = process.env.PORT || 4000;
 
-const uploadsDir = path.join(backendRoot, "uploads");
-const resultsDir = path.join(backendRoot, "results");
+const uploadsDir = path.join(projectRoot, "uploads");
+const resultsDir = path.join(projectRoot, "results");
 
 for (const dir of [uploadsDir, resultsDir]) {
   if (!fs.existsSync(dir)) {
@@ -40,7 +34,7 @@ app.use("/results", express.static(resultsDir));
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadsDir),
   filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname || ".jpg").toLowerCase();
+    const ext = path.extname(file.originalname || ".jpg");
     cb(null, `${Date.now()}-${uuidv4()}${ext}`);
   }
 });
@@ -84,32 +78,26 @@ app.post("/api/analyze", upload.single("image"), async (req, res) => {
   }
 });
 
-app.use(express.static(frontendRoot));
-
-app.get("*", (_req, res) => {
-  res.sendFile(path.join(frontendRoot, "index.html"));
-});
-
 function runPythonAnalysis(inputPath, outputPath) {
   return new Promise((resolve, reject) => {
-    const pythonScript = path.resolve(backendRoot, "python", "analyze_pruning.py");
+    const pythonScript = path.resolve(projectRoot, "python", "analyze_pruning.py");
 
-    const child = spawn("python3", [pythonScript, inputPath, outputPath], {
-      cwd: backendRoot
+    const process = spawn("python3", [pythonScript, inputPath, outputPath], {
+      cwd: projectRoot
     });
 
     let stdout = "";
     let stderr = "";
 
-    child.stdout.on("data", (chunk) => {
+    process.stdout.on("data", (chunk) => {
       stdout += chunk.toString();
     });
 
-    child.stderr.on("data", (chunk) => {
+    process.stderr.on("data", (chunk) => {
       stderr += chunk.toString();
     });
 
-    child.on("close", (code) => {
+    process.on("close", (code) => {
       if (code !== 0) {
         reject(new Error(`Python process failed (${code}): ${stderr}`));
         return;
@@ -130,6 +118,6 @@ app.use((err, _req, res, _next) => {
   res.status(400).json({ error: err.message || "Request failed" });
 });
 
-app.listen(PORT, HOST, () => {
+app.listen(PORT, () => {
   console.log(`Backend running on http://localhost:${PORT}`);
 });

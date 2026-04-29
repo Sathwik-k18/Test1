@@ -1,145 +1,220 @@
-# AI Crop-Specific Pruning Recommendation System (MVP - Fixed)
+# AI Crop-Specific Pruning Recommendation System (MVP)
 
-## What was fixed
+A beginner-friendly but production-minded prototype for branch pruning recommendations from plant/tree images.
 
-1. **`Cannot GET /`** fixed by serving frontend static files from Express and adding SPA fallback route.
-2. **Incorrect pruning circles** fixed by:
-   - limiting branch detection to plant-colored regions (mask),
-   - tightening Hough and pruning thresholds,
-   - correcting frontend coordinate scaling using backend image dimensions,
-   - avoiding mixed coordinate spaces from double-rendering different images.
-3. **Frontend + backend integration** fixed so the UI can call the API on the same origin.
+## 1) Architecture (MVP first)
+
+### High-level flow
+1. User uploads plant image from web UI.
+2. Node.js (Express) receives image and saves it.
+3. Node.js calls Python OpenCV script.
+4. Python detects branch-like line segments + applies pruning rules.
+5. Python returns JSON suggestions + writes annotated image.
+6. Frontend renders annotated image and human-readable reasons.
+
+### Components
+- **Frontend (`frontend/`)**: simple HTML/CSS/JS UI with canvas drawing.
+- **Backend (`backend/src/server.js`)**: upload API, Python process orchestration, static file serving.
+- **AI Processing (`backend/python/analyze_pruning.py`)**: branch detection + rule engine + explanation generator.
+- **Storage (`backend/uploads`, `backend/results`)**: raw uploads and output images.
+
+### Why this is good for 1 month
+- Week 1: end-to-end MVP (this repo).
+- Week 2: improve rule tuning per crop.
+- Week 3: add minimal ML scoring feature.
+- Week 4: polish, test, and document patent claims.
 
 ---
 
-## Project structure
+## 2) Folder structure
 
 ```text
 .
-├── .env.example
-├── package.json
 ├── backend
 │   ├── package.json
-│   ├── src/server.js
-│   ├── python/analyze_pruning.py
-│   ├── python/requirements.txt
-│   ├── uploads/
-│   └── results/
-└── frontend
-    ├── index.html
-    ├── styles.css
-    └── script.js
+│   ├── src
+│   │   └── server.js
+│   ├── python
+│   │   ├── analyze_pruning.py
+│   │   └── requirements.txt
+│   ├── uploads/             # runtime
+│   └── results/             # runtime
+├── frontend
+│   ├── index.html
+│   ├── styles.css
+│   └── script.js
+└── README.md
 ```
 
 ---
 
-## Dependencies to install
+## 3) Core APIs and JSON contract
 
-### System
-- Node.js 20+
-- Python 3.10+
+### Endpoint
+`POST /api/analyze`
 
-### Backend Node packages
-```bash
-cd backend
-npm install
-```
+### Form-data input
+- `image`: image file
 
-### Python packages
-```bash
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r python/requirements.txt
-```
-
----
-
-## Environment variables
-
-Create `.env` in repository root (or copy from `.env.example`):
-
-```bash
-cp .env.example .env
-```
-
-Available variables:
-- `PORT` (default `4000`)
-- `HOST` (default `0.0.0.0`)
-
----
-
-## How to run (recommended: single server)
-
-From repo root:
-
-```bash
-cd backend
-npm run dev
-```
-
-Open in browser:
-- `http://localhost:4000/` (frontend page)
-- API health: `http://localhost:4000/api/health`
-
-This works because backend now serves files from `frontend/` directly.
-
----
-
-## Optional: run frontend separately
-
-If needed for static frontend-only development:
-
-```bash
-npm run start:frontend
-```
-
-Then open:
-- `http://localhost:5500/`
-
-> If running frontend separately, keep backend running on `http://localhost:4000`.
-
----
-
-## Root cause of incorrect pruning markings
-
-The circles were spread incorrectly due to **coordinate mismatch**:
-- the frontend drew an already annotated backend image,
-- then added a second overlay using dimensions from a different image coordinate space.
-
-This caused scale drift and misplaced markers.
-
-Fix applied:
-- frontend now draws the uploaded image once and overlays circles using backend-provided original width/height;
-- backend includes `imageWidth`/`imageHeight` in response;
-- detection now ignores non-plant regions using HSV masking, reducing random false detections.
-
----
-
-## API output format (current)
-
-`POST /api/analyze` returns:
+### Response JSON example
 
 ```json
 {
   "message": "Analysis complete",
-  "inputImage": "...",
-  "annotatedImageUrl": "/results/annotated-...png",
+  "inputImage": "17100000-uuid.jpg",
+  "annotatedImageUrl": "/results/annotated-17100000-uuid.png",
   "stats": {
-    "detectedBranches": 20,
-    "pruneCandidates": 4,
-    "imageWidth": 1280,
-    "imageHeight": 720
+    "detectedBranches": 42,
+    "pruneCandidates": 8
   },
   "suggestions": [
     {
-      "branch_id": 1,
-      "center_x": 430,
-      "center_y": 290,
+      "branch_id": 3,
+      "center_x": 320,
+      "center_y": 210,
       "radius": 14,
-      "reason": "Overcrowded area, Weak branch",
-      "confidence": 0.75
+      "reason": "Overcrowded area, Blocking sunlight",
+      "confidence": 0.7
     }
   ]
 }
 ```
+
+---
+
+## 4) Branch detection + pruning rules (implemented)
+
+Inside `analyze_pruning.py`:
+
+### Detection (OpenCV)
+- Convert to grayscale
+- Gaussian blur
+- Canny edges
+- Probabilistic Hough transform (`HoughLinesP`) to detect branch-like lines
+
+### Rule-based pruning logic
+Each detected branch gets a score:
+- **Overcrowded area**: too many nearby branch midpoints.
+- **Blocking sunlight**: branch direction points inward toward canopy center.
+- **Weak branch**: very short branch length.
+- **Overlapping branch**: local crossing/angle conflict with nearby lines.
+
+If total score >= threshold, branch is marked for pruning.
+
+### Explainability
+For every pruning candidate we store:
+- coordinates `(center_x, center_y)`
+- `radius` for red circle
+- `reason` (human readable)
+- `confidence`
+
+---
+
+## 5) Frontend rendering of red circles
+
+The frontend does both:
+1. display the annotated image from backend
+2. draw circles and reason labels on canvas using returned coordinates
+
+This makes the output auditable and easy for farmers/experts to validate.
+
+---
+
+## 6) Simple ML upgrade (optional, one feature)
+
+Add one tiny ML module after MVP:
+
+**Upgrade idea: Branch Weakness Classifier (Logistic Regression)**
+- Features: branch length, local density, angle, overlap count.
+- Label: prune/not-prune from expert examples.
+- Keep rules as baseline; ML only adjusts confidence.
+
+Why this is beginner-friendly:
+- very small dataset needed initially
+- easy to train with `scikit-learn`
+- interpretable coefficients (helps patent narrative)
+
+---
+
+## 7) Patent-oriented improvements (practical)
+
+Potential novelty direction:
+1. **Hybrid rule + explainability scoring engine** for pruning.
+2. **Crop-specific policy profiles** (mango, grape, apple): same detector, different thresholds/reason weights.
+3. **Reason trace object**: store which rule contributed what score (auditable decision path).
+4. **Temporal comparison**: compare before/after images to validate pruning outcomes.
+
+For patent preparation, document:
+- unique rule combinations
+- confidence fusion method
+- explainability schema
+- crop profile adaptation logic
+
+---
+
+## 8) Production-level checklist (next steps)
+
+- Add authentication and role-based access.
+- Use queue workers (BullMQ/Celery) for heavy image jobs.
+- Move files to object storage (S3/GCS).
+- Add API validation (`zod`/`joi`) and rate limiting.
+- Add structured logs + monitoring.
+- Containerize backend/python and deploy behind reverse proxy.
+
+---
+
+## 9) Run locally (step-by-step)
+
+### Prerequisites
+- Node.js 20+
+- Python 3.10+
+
+### Backend setup
+
+```bash
+cd backend
+npm install
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r python/requirements.txt
+npm run dev
+```
+
+Backend starts on `http://localhost:4000`.
+
+### Frontend setup
+
+In another terminal:
+
+```bash
+cd frontend
+python3 -m http.server 5500
+```
+
+Open `http://localhost:5500`.
+
+Upload an image and inspect pruning recommendations.
+
+---
+
+## 10) 1-month execution plan
+
+### Week 1 (MVP)
+- Complete upload/analyze/render loop.
+- Validate rules on 20-30 sample images.
+
+### Week 2 (Crop-specific tuning)
+- Add profile JSON (e.g., mango/grape).
+- Tune thresholds per crop.
+
+### Week 3 (One ML feature)
+- Train logistic regression weakness scorer.
+- Blend with rule confidence.
+
+### Week 4 (Hackathon + patent prep)
+- Demo script + case studies.
+- Draft provisional patent claims around hybrid explainable pruning engine.
+
+---
+
+If you want, next I can add **crop profile support** (e.g., mango/grape rules) with only ~2 extra files and endpoint changes.

@@ -1,4 +1,4 @@
-const API_BASE = window.location.origin;
+const API_BASE = "http://localhost:4000";
 const form = document.getElementById("uploadForm");
 const imageInput = document.getElementById("imageInput");
 const previewCanvas = document.getElementById("previewCanvas");
@@ -17,10 +17,10 @@ function drawImageOnCanvas(canvas, img) {
   ctx.drawImage(img, 0, 0, width, height);
 }
 
-function drawRedCircles(canvas, suggestions, imageWidth, imageHeight) {
+function drawRedCircles(canvas, suggestions, originalWidth, originalHeight) {
   const ctx = canvas.getContext("2d");
-  const scaleX = canvas.width / imageWidth;
-  const scaleY = canvas.height / imageHeight;
+  const scaleX = canvas.width / originalWidth;
+  const scaleY = canvas.height / originalHeight;
 
   ctx.strokeStyle = "red";
   ctx.lineWidth = 2;
@@ -53,11 +53,9 @@ function renderSuggestions(suggestions) {
   });
 }
 
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  if (!imageInput.files[0]) {
-    return;
-  }
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!imageInput.files[0]) return;
 
   statusEl.textContent = "Analyzing image...";
 
@@ -82,17 +80,21 @@ form.addEventListener("submit", async (event) => {
 
     const result = await response.json();
 
-    drawImageOnCanvas(resultCanvas, previewImg);
+    const annotatedImg = new Image();
+    annotatedImg.src = `${API_BASE}${result.annotatedImageUrl}`;
+    await annotatedImg.decode();
+    drawImageOnCanvas(resultCanvas, annotatedImg);
+
     drawRedCircles(
       resultCanvas,
       result.suggestions,
-      result.stats.imageWidth,
-      result.stats.imageHeight
+      previewImg.width,
+      previewImg.height
     );
 
     renderSuggestions(result.suggestions);
     statusEl.textContent = `Done. Detected branches: ${result.stats.detectedBranches}. Prune candidates: ${result.stats.pruneCandidates}.`;
-  } catch (error) {
-    statusEl.textContent = `Error: ${error.message}`;
+  } catch (err) {
+    statusEl.textContent = `Error: ${err.message}`;
   }
 });
